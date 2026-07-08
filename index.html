@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>にほんごアドベンチャー</title>
+<link rel="icon" href="icons/icon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<style>
+html,body{margin:0;padding:0;width:100%;height:100%;}
+body{
+  background:radial-gradient(circle at 50% 35%,#282640,#12111e 70%);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  min-height:100vh;
+  box-sizing:border-box;
+  gap:28px;
+  font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif;
+}
+.icon-img{
+  width:180px;
+  height:180px;
+  border-radius:36px;
+  box-shadow:0 10px 40px rgba(0,0,0,.5);
+  image-rendering:-webkit-optimize-contrast;
+}
+.title-txt{
+  color:#ffd700;
+  font-size:22px;
+  font-weight:900;
+  letter-spacing:2px;
+  text-shadow:0 2px 10px rgba(0,0,0,.6);
+}
+.open-btn{
+  padding:16px 44px;
+  border-radius:99px;
+  background:#ffc107;
+  color:#12111e;
+  font-size:18px;
+  font-weight:900;
+  text-decoration:none;
+  box-shadow:0 6px 22px rgba(0,0,0,.4);
+  letter-spacing:1px;
+}
+.open-btn:active{transform:scale(.97);}
+</style>
+</head>
+<body>
+  <img class="icon-img" src="icons/icon-180.png" alt="icon">
+  <div class="title-txt">にほんごアドベンチャー</div>
+  <a class="open-btn" href="game.html">▶ アプリを開く</a>
+</body>
+</html>
