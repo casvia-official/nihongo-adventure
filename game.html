@@ -500,6 +500,8 @@ button{cursor:pointer;border:none;outline:none;font-family:inherit;}
 .save-modal-text{width:100%;height:130px;box-sizing:border-box;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:#0b1422;color:var(--on);font-size:12px;padding:10px;resize:none;word-break:break-all;font-family:monospace;}
 .save-modal-filename{width:100%;box-sizing:border-box;border-radius:10px;border:1px dashed rgba(255,255,255,.25);background:#0b1422;color:var(--dim);font-size:13px;padding:14px;text-align:center;}
 .save-modal-filename.picked{color:var(--gold);border-style:solid;border-color:rgba(255,193,7,.4);}
+.save-modal-or{text-align:center;font-size:12px;color:var(--dim);margin:10px 0 8px;}
+.save-modal-code{width:100%;height:90px;box-sizing:border-box;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:#0b1422;color:var(--on);font-size:12px;padding:10px;resize:none;word-break:break-all;font-family:monospace;}
 
 /* Account create modal */
 .acc-modal-bg{display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.7);flex-direction:column;align-items:center;justify-content:center;padding:20px;}
@@ -798,6 +800,8 @@ button{cursor:pointer;border:none;outline:none;font-family:inherit;}
     <div class="save-modal-desc" id="save-modal-desc"></div>
     <input type="file" id="save-modal-file" accept="application/json,.json" style="display:none" onchange="handleSaveFileSelected(event)">
     <div class="save-modal-filename" id="save-modal-filename" style="display:none"></div>
+    <div class="save-modal-or" id="save-modal-or" style="display:none">または</div>
+    <textarea class="save-modal-code" id="save-modal-code" style="display:none" placeholder="ふるいアプリの「コード」を貼り付ける場合はここに（NA1:… / NA3:… など）" oninput="handleSaveCodeInput()"></textarea>
     <div class="acc-modal-btns">
       <button class="acc-modal-cancel" onclick="closeSaveModal()">とじる</button>
       <button class="acc-modal-ok" id="save-modal-action"></button>
@@ -1180,6 +1184,8 @@ async function openExportModal(){
   document.getElementById('save-modal-file').style.display='none';
   const fn=document.getElementById('save-modal-filename');
   fn.style.display='none';
+  document.getElementById('save-modal-or').style.display='none';
+  document.getElementById('save-modal-code').style.display='none';
   const btn=document.getElementById('save-modal-action');
   btn.textContent='💾 ファイルを保存';
   btn.onclick=downloadSaveFile;
@@ -1199,16 +1205,20 @@ async function downloadSaveFile(){
   alert('セーブファイルを保存したよ！\n「ダウンロード」フォルダなどに入っているはず。\nべつの端末に移すときは、そのファイルをAirDropやLINE・メールで送ってね。');
 }
 let pickedSaveJSON=null;
+let pickedSaveCode='';
 function openImportModal(){
   document.getElementById('save-modal-title').textContent='📥 セーブを読み込む';
-  document.getElementById('save-modal-desc').textContent='セーブファイル（.json）を選んでね。※いまのデータは上書きされます。';
-  pickedSaveJSON=null;
+  document.getElementById('save-modal-desc').textContent='セーブファイル（.json）を選んでね。ふるいアプリの「コード」しか無い場合は、下の欄に貼り付けてもOK。※いまのデータは上書きされます。';
+  pickedSaveJSON=null;pickedSaveCode='';
   const fileInput=document.getElementById('save-modal-file');
   fileInput.value='';
   fileInput.style.display='block';
   const fn=document.getElementById('save-modal-filename');
   fn.style.display='block';fn.className='save-modal-filename';fn.textContent='タップしてファイルを選んでね';
   fn.onclick=()=>fileInput.click();
+  document.getElementById('save-modal-or').style.display='block';
+  const codeEl=document.getElementById('save-modal-code');
+  codeEl.style.display='block';codeEl.value='';
   const btn=document.getElementById('save-modal-action');
   btn.textContent='復元する';btn.onclick=doImportSave;
   document.getElementById('save-modal-bg').classList.add('show');
@@ -1222,23 +1232,50 @@ function handleSaveFileSelected(e){
     pickedSaveJSON=reader.result;
     fn.className='save-modal-filename picked';
     fn.textContent='✓ '+file.name;
+    // ファイルを選んだらコード欄はクリア（どちらか一方を使う）
+    pickedSaveCode='';document.getElementById('save-modal-code').value='';
   };
   reader.onerror=()=>{pickedSaveJSON=null;fn.className='save-modal-filename';fn.textContent='読み込めませんでした。もう一度選んでね';};
   reader.readAsText(file);
 }
+function handleSaveCodeInput(){
+  pickedSaveCode=document.getElementById('save-modal-code').value.trim();
+  if(pickedSaveCode){
+    // コードを入力したらファイル選択はクリア
+    pickedSaveJSON=null;
+    document.getElementById('save-modal-file').value='';
+    const fn=document.getElementById('save-modal-filename');
+    fn.className='save-modal-filename';fn.textContent='タップしてファイルを選んでね';
+  }
+}
 function closeSaveModal(){document.getElementById('save-modal-bg').classList.remove('show');}
+// 旧バージョン（コピペコード時代）の「NA1:xxx」「NA2:xxx」「NA3:xxx」形式を復元
+async function expandLegacyCode(raw){
+  if(raw.indexOf('NA3:')===0){return expandData(JSON.parse(await gunzipB64(raw.slice(4))));}
+  if(raw.indexOf('NA2:')===0){return JSON.parse(await gunzipB64(raw.slice(4)));}
+  if(raw.indexOf('NA1:')===0){return JSON.parse(decodeURIComponent(escape(atob(raw.slice(4)))));}
+  return null;
+}
 async function doImportSave(){
-  if(!pickedSaveJSON){alert('セーブファイルを選んでね');return;}
-  let parsed;
-  try{parsed=JSON.parse(pickedSaveJSON);}
-  catch(e){alert('このファイルは読み取れませんでした。セーブファイル（.json）を選んでね。');return;}
-  if(!parsed||typeof parsed!=='object'||!parsed.format||!parsed.data){alert('セーブファイルの形式がちがうみたい。「書き出す」で保存したファイルを選んでね。');return;}
+  if(!pickedSaveJSON&&!pickedSaveCode){alert('セーブファイルを選ぶか、コードを貼り付けてね');return;}
   let data;
-  try{
-    if(parsed.format==='NA3'){data=expandData(JSON.parse(await gunzipB64(parsed.data)));}
-    else if(parsed.format==='NA1'){data=JSON.parse(decodeURIComponent(escape(atob(parsed.data))));}
-    else{alert('対応していない形式のファイルです。');return;}
-  }catch(e){alert('ファイルの中身が読み取れませんでした。');return;}
+  if(pickedSaveCode){
+    // 旧コード（文字列）形式
+    try{data=await expandLegacyCode(pickedSaveCode);}
+    catch(e){alert('コードが読み取れませんでした。コピーもれが無いか確認してね。');return;}
+    if(!data){alert('コードの形式がちがうみたい。「NA1:」「NA2:」「NA3:」のいずれかで始まるコードを貼り付けてね。');return;}
+  }else{
+    // 新ファイル形式
+    let parsed;
+    try{parsed=JSON.parse(pickedSaveJSON);}
+    catch(e){alert('このファイルは読み取れませんでした。セーブファイル（.json）を選んでね。');return;}
+    if(!parsed||typeof parsed!=='object'||!parsed.format||!parsed.data){alert('セーブファイルの形式がちがうみたい。「書き出す」で保存したファイルを選んでね。');return;}
+    try{
+      if(parsed.format==='NA3'){data=expandData(JSON.parse(await gunzipB64(parsed.data)));}
+      else if(parsed.format==='NA1'){data=JSON.parse(decodeURIComponent(escape(atob(parsed.data))));}
+      else{alert('対応していない形式のファイルです。');return;}
+    }catch(e){alert('ファイルの中身が読み取れませんでした。');return;}
+  }
   if(!data||typeof data!=='object'){alert('データが正しくありません。');return;}
   if(!confirm('いまのデータを、読み込んだデータで上書きします。よろしいですか？'))return;
   const rm=[];
