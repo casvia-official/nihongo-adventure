@@ -801,7 +801,7 @@ button{cursor:pointer;border:none;outline:none;font-family:inherit;}
     <input type="file" id="save-modal-file" accept="application/json,.json" style="display:none" onchange="handleSaveFileSelected(event)">
     <div class="save-modal-filename" id="save-modal-filename" style="display:none"></div>
     <div class="save-modal-or" id="save-modal-or" style="display:none">または</div>
-    <textarea class="save-modal-code" id="save-modal-code" style="display:none" placeholder="ふるいアプリの「コード」を貼り付ける場合はここに（NA1:… / NA3:… など）" oninput="handleSaveCodeInput()"></textarea>
+    <textarea class="save-modal-code" id="save-modal-code" style="display:none" placeholder="ふるいアプリの「コード」を貼り付ける場合はここに（NA1:… / NA3:… など）" oninput="handleSaveCodeInput()" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false"></textarea>
     <div class="acc-modal-btns">
       <button class="acc-modal-cancel" onclick="closeSaveModal()">とじる</button>
       <button class="acc-modal-ok" id="save-modal-action"></button>
@@ -1238,8 +1238,20 @@ function handleSaveFileSelected(e){
   reader.onerror=()=>{pickedSaveJSON=null;fn.className='save-modal-filename';fn.textContent='読み込めませんでした。もう一度選んでね';};
   reader.readAsText(file);
 }
+// 改行・タブ・BOM・ゼロ幅スペースなど、コピペで紛れやすい見えない文字を除去（charCode方式で安全に構築）
+function sanitizeCode(s){
+  var codes=[13,10,9,160,65279,8203,8204,8205,8288];
+  var invisibleChars='';
+  for(var i=0;i<codes.length;i++){invisibleChars+=String.fromCharCode(codes[i]);}
+  var out='';
+  var raw=String(s||'');
+  for(var j=0;j<raw.length;j++){
+    if(invisibleChars.indexOf(raw[j])===-1)out+=raw[j];
+  }
+  return out.trim();
+}
 function handleSaveCodeInput(){
-  pickedSaveCode=document.getElementById('save-modal-code').value.trim();
+  pickedSaveCode=sanitizeCode(document.getElementById('save-modal-code').value);
   if(pickedSaveCode){
     // コードを入力したらファイル選択はクリア
     pickedSaveJSON=null;
@@ -1251,6 +1263,7 @@ function handleSaveCodeInput(){
 function closeSaveModal(){document.getElementById('save-modal-bg').classList.remove('show');}
 // 旧バージョン（コピペコード時代）の「NA1:xxx」「NA2:xxx」「NA3:xxx」形式を復元
 async function expandLegacyCode(raw){
+  raw=sanitizeCode(raw);
   if(raw.indexOf('NA3:')===0){return expandData(JSON.parse(await gunzipB64(raw.slice(4))));}
   if(raw.indexOf('NA2:')===0){return JSON.parse(await gunzipB64(raw.slice(4)));}
   if(raw.indexOf('NA1:')===0){return JSON.parse(decodeURIComponent(escape(atob(raw.slice(4)))));}
