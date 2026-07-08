@@ -1208,7 +1208,7 @@ let pickedSaveJSON=null;
 let pickedSaveCode='';
 function openImportModal(){
   document.getElementById('save-modal-title').textContent='📥 セーブを読み込む';
-  document.getElementById('save-modal-desc').textContent='セーブファイル（.json）を選んでね。ふるいアプリの「コード」しか無い場合は、下の欄に貼り付けてもOK。※いまのデータは上書きされます。';
+  document.getElementById('save-modal-desc').textContent='セーブファイル（.json）を選んでね。ふるいアプリの「コード」しか無い場合は、下の欄に貼り付けてもOK。※いまのデータは上書きされます。（読み込み画面 v3）';
   pickedSaveJSON=null;pickedSaveCode='';
   const fileInput=document.getElementById('save-modal-file');
   fileInput.value='';
@@ -1250,8 +1250,38 @@ function sanitizeCode(s){
   }
   return out.trim();
 }
+// 全角英数字・全角コロン・全角スペースを半角に直す（iPadの自動変換対策）
+function normalizeCode(s){
+  var raw=String(s||'');
+  var out='';
+  for(var i=0;i<raw.length;i++){
+    var c=raw.charCodeAt(i);
+    if(c>=65281&&c<=65374){c-=65248;}
+    else if(c===12288){c=32;}
+    out+=String.fromCharCode(c);
+  }
+  return out;
+}
+// 貼り付けテキストの中から「NA1:/NA2:/NA3:＋base64本体」だけを抜き出す（前後にゴミがあっても救済）
+function extractSaveCode(s){
+  var t=sanitizeCode(normalizeCode(s));
+  var B='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+  for(var i=0;i+3<t.length;i++){
+    if(t[i]==='N'&&t[i+1]==='A'&&(t[i+2]==='1'||t[i+2]==='2'||t[i+2]==='3')&&t[i+3]===':'){
+      var j=i+4,body='';
+      while(j<t.length){
+        var ch=t[j];
+        if(ch===' '){j++;continue;}
+        if(B.indexOf(ch)!==-1){body+=ch;j++;continue;}
+        break;
+      }
+      if(body.length>0)return 'NA'+t[i+2]+':'+body;
+    }
+  }
+  return null;
+}
 function handleSaveCodeInput(){
-  pickedSaveCode=sanitizeCode(document.getElementById('save-modal-code').value);
+  pickedSaveCode=sanitizeCode(normalizeCode(document.getElementById('save-modal-code').value));
   if(pickedSaveCode){
     // コードを入力したらファイル選択はクリア
     pickedSaveJSON=null;
@@ -1273,10 +1303,15 @@ async function doImportSave(){
   if(!pickedSaveJSON&&!pickedSaveCode){alert('セーブファイルを選ぶか、コードを貼り付けてね');return;}
   let data;
   if(pickedSaveCode){
-    // 旧コード（文字列）形式
-    try{data=await expandLegacyCode(pickedSaveCode);}
-    catch(e){alert('コードが読み取れませんでした。コピーもれが無いか確認してね。');return;}
-    if(!data){alert('コードの形式がちがうみたい。「NA1:」「NA2:」「NA3:」のいずれかで始まるコードを貼り付けてね。');return;}
+    // 旧コード（文字列）形式。前後にゴミが付いていてもコード部分だけ抜き出す
+    const ext=extractSaveCode(pickedSaveCode);
+    if(!ext){
+      alert('コードの形式がちがうみたい。「NA1:」「NA2:」「NA3:」で始まるコードを貼り付けてね。\n（受け取った先頭:「'+pickedSaveCode.slice(0,16)+'…」）');
+      return;
+    }
+    try{data=await expandLegacyCode(ext);}
+    catch(e){alert('コードが読み取れませんでした。とちゅうで切れていないか確認してね。\n（読み取れたコードの長さ: '+ext.length+'文字）');return;}
+    if(!data){alert('コードの形式がちがうみたい。「NA1:」「NA2:」「NA3:」で始まるコードを貼り付けてね。');return;}
   }else{
     // 新ファイル形式
     let parsed;
