@@ -97,6 +97,8 @@ button{cursor:pointer;border:none;outline:none;font-family:inherit;}
 .illust-wrap{width:100%;height:100%;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;}
 .illust-bg{position:absolute;font-size:140px;opacity:.08;line-height:1;user-select:none;}
 .illust-main{font-size:72px;line-height:1;z-index:1;}
+.hint-btn{position:absolute;bottom:8px;right:10px;z-index:2;padding:7px 14px;border-radius:99px;border:1px solid rgba(255,193,7,.5);background:rgba(255,193,7,.15);color:var(--gold);font-size:13px;font-weight:900;cursor:pointer;transition:transform .1s;}
+.hint-btn:active{transform:scale(.94);}
 .illust-kanji{z-index:1;font-weight:900;line-height:1;color:#fff;font-family:'Yu Mincho','Hiragino Mincho ProN',serif;font-size:104px;}
 .illust-kanji.long{font-size:72px;}
 /* 広い画面（iPad横など）用：左の余白に「ステータスへ戻る」ボタン */
@@ -394,8 +396,12 @@ button{cursor:pointer;border:none;outline:none;font-family:inherit;}
 .an-item.open .an-item-arw{transform:rotate(90deg);}
 .an-qlist{display:none;padding:4px 10px 10px;background:#0a1520;}
 .an-item.open .an-qlist{display:block;}
-.an-qrow{display:flex;align-items:center;gap:8px;padding:7px 8px;border-bottom:1px solid #16283a;}
+.an-qrow{border-bottom:1px solid #16283a;cursor:pointer;}
 .an-qrow:last-child{border-bottom:none;}
+.an-qrow-hd{display:flex;align-items:center;gap:8px;padding:7px 8px;}
+.an-qdetail{display:none;padding:2px 8px 10px;}
+.an-qrow.open{background:rgba(74,158,255,.05);}
+.an-qrow.open .an-qdetail{display:block;}
 .an-qbar-wrap{flex:1;min-width:0;}
 .an-qtext{font-size:12px;color:#c0d8f0;line-height:1.35;margin-bottom:3px;}
 .an-qbar{height:5px;background:#16283a;border-radius:99px;overflow:hidden;}
@@ -1654,6 +1660,13 @@ function setStageMode(mode){
 let quizQueue=[],quizIdx=0,score=0,streak=0,quizXP=0;
 let quizCountSelected=10;
 let quizLog=[]; // {q, correct, pickedIdx, correctIdx, shuffledChoices}
+let curHintEm=''; // 現在の問題のヒント絵文字（💡ヒントボタンで表示）
+function revealHint(){
+  const el=document.getElementById('illust-hint');
+  if(el)el.textContent=curHintEm;
+  const b=document.getElementById('hint-btn');
+  if(b)b.style.display='none';
+}
 
 function startQuizCount(lv,count){
   currentLv=lv;
@@ -1696,13 +1709,22 @@ function renderQuiz(){
   // 漢字の画数・部首・読みの問題は、対象の漢字をイラスト枠に大きく表示して見やすくする
   const _km=q.q.match(/「([^」]+)」/);
   const _featureKanji=(_km&&/[一-龯]/.test(_km[1])&&/何画|画数|部首|読/.test(q.q))?_km[1]:null;
-  const _illustMain=_featureKanji
-    ? `<div class="illust-kanji${_featureKanji.length>=3?' long':''}" style="text-shadow:0 0 20px ${_lvi.color},0 2px 6px rgba(0,0,0,.5);">${_featureKanji}</div>`
-    : `<div class="illust-main" style="filter:drop-shadow(0 0 18px ${_lvi.color}88);">${q.em}</div>`;
+  // 漢字ステージ以外は、絵文字が答えのヒントになりすぎるため「💡ヒント」を押した時だけ表示する
+  curHintEm=q.em;
+  let _illustMain,_bgEm=q.em,_hintBtn='';
+  if(_featureKanji){
+    _illustMain=`<div class="illust-kanji${_featureKanji.length>=3?' long':''}" style="text-shadow:0 0 20px ${_lvi.color},0 2px 6px rgba(0,0,0,.5);">${_featureKanji}</div>`;
+  }else if(q.stage==='kanji'){
+    _illustMain=`<div class="illust-main" style="filter:drop-shadow(0 0 18px ${_lvi.color}88);">${q.em}</div>`;
+  }else{
+    _bgEm='❓';
+    _illustMain=`<div class="illust-main" id="illust-hint" style="filter:drop-shadow(0 0 18px ${_lvi.color}88);">❓</div>`;
+    _hintBtn=`<button class="hint-btn" id="hint-btn" onclick="revealHint()">💡 ヒント</button>`;
+  }
   document.getElementById('stage-illust').innerHTML=`
     <div class="illust-wrap" style="background:linear-gradient(160deg,${_lvi.dark},#12111e);">
-      <div class="illust-bg">${q.em}</div>
-      ${_illustMain}
+      <div class="illust-bg">${_bgEm}</div>
+      ${_illustMain}${_hintBtn}
     </div>`;
 
   const kwEl=document.getElementById('quiz-kw');
@@ -1713,7 +1735,10 @@ function renderQuiz(){
   else if(q.stage==='kanyo_rev'){kwEl.textContent='📖 慣用句を選ぼう';}
   else if(q.stage==='kanyo'){kwEl.textContent='📖 意味を選ぼう';}
   else if(q.stage==='kanji'){kwEl.textContent='📖 '+((LV_INFO[q.lv]&&LV_INFO[q.lv].name)||'漢字マスター');}
-  else{kwEl.textContent='📖 '+q.kw;}
+  else{
+    // キーワードが正解そのものの場合は表示しない（答えが見えてしまうため）
+    kwEl.textContent=(q.kw&&q.kw!==q.c[q.a])?'📖 '+q.kw:'📖 もんだい';
+  }
   document.getElementById('quiz-q').textContent=q.q;
 
   // 4級・3級の「読み方」問題は、選択肢ではなくひらがなキーボードで答える
@@ -2117,7 +2142,9 @@ function analyzeLevel(lv,qstats){
   const qs=QUESTIONS.filter(q=>q.lv===lv).map(q=>{
     const rec=qstats[lv+'|'+q.q]||{a:0,c:0};
     const rate=rec.a>0?Math.round(rec.c/rec.a*100):0;
-    return{q:q.q,a:rec.a,c:rec.c,rate,answered:rec.a>0};
+    // kb=キーボード入力式（4級・3級の読み問題）。選択肢は出題されないので答えのみ表示する
+    const kb=(q.lv>=15&&q.lv<=18&&/読み方/.test(q.q));
+    return{q:q.q,a:rec.a,c:rec.c,rate,answered:rec.a>0,choices:q.c,ansIdx:q.a,exp:q.exp,kb};
   });
   const answeredQs=qs.filter(x=>x.answered);
   const sumA=answeredQs.reduce((s,x)=>s+x.a,0);
@@ -2159,12 +2186,20 @@ function renderAnalysis(){
         const col=rateColor(x.rate,x.answered);
         const rt=x.answered?x.rate+'%':'未挑戦';
         const sub=x.answered?`<small>${x.c}/${x.a}問正解</small>`:'';
-        return `<div class="an-qrow">
-          <div class="an-qbar-wrap">
-            <div class="an-qtext">${escapeHTML(x.q)}</div>
-            <div class="an-qbar"><div class="an-qfill" style="width:${x.answered?x.rate:0}%;background:${col}"></div></div>
+        // タップで選択肢と正解を確認できる詳細（キーボード入力式は答えのみ）
+        const choicesHTML=x.kb
+          ?`<div class="review-choice correct">✅ こたえ: ${escapeHTML(x.choices[x.ansIdx])}</div>`
+          :x.choices.map((t,ci)=>`<div class="review-choice ${ci===x.ansIdx?'correct':'other'}">${ci===x.ansIdx?'✅':'　'} ${escapeHTML(t)}</div>`).join('');
+        const expHTML=x.exp?`<div class="review-exp">📝 ${escapeHTML(x.exp)}</div>`:'';
+        return `<div class="an-qrow" onclick="event.stopPropagation();this.classList.toggle('open')">
+          <div class="an-qrow-hd">
+            <div class="an-qbar-wrap">
+              <div class="an-qtext">${escapeHTML(x.q)}</div>
+              <div class="an-qbar"><div class="an-qfill" style="width:${x.answered?x.rate:0}%;background:${col}"></div></div>
+            </div>
+            <div class="an-qrate" style="color:${col}">${rt}${sub}</div>
           </div>
-          <div class="an-qrate" style="color:${col}">${rt}${sub}</div>
+          <div class="an-qdetail"><div class="review-choices">${choicesHTML}</div>${expHTML}</div>
         </div>`;
       }).join('');
       return `<div class="an-item" onclick="this.classList.toggle('open')">
