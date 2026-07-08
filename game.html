@@ -1208,7 +1208,7 @@ let pickedSaveJSON=null;
 let pickedSaveCode='';
 function openImportModal(){
   document.getElementById('save-modal-title').textContent='📥 セーブを読み込む';
-  document.getElementById('save-modal-desc').textContent='セーブファイル（.json）を選んでね。ふるいアプリの「コード」しか無い場合は、下の欄に貼り付けてもOK。※いまのデータは上書きされます。（読み込み画面 v3）';
+  document.getElementById('save-modal-desc').textContent='セーブファイル（.json）を選んでね。ふるいアプリの「コード」しか無い場合は、下の欄に貼り付けてもOK。※いまのデータは上書きされます。（読み込み画面 v4）';
   pickedSaveJSON=null;pickedSaveCode='';
   const fileInput=document.getElementById('save-modal-file');
   fileInput.value='';
@@ -1267,7 +1267,8 @@ function extractSaveCode(s){
   var t=sanitizeCode(normalizeCode(s));
   var B='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
   for(var i=0;i+3<t.length;i++){
-    if(t[i]==='N'&&t[i+1]==='A'&&(t[i+2]==='1'||t[i+2]==='2'||t[i+2]==='3')&&t[i+3]===':'){
+    // 先頭の「NA」は大文字小文字どちらでも受け付ける（iPadが na3: と小文字化する事例があったため）
+    if((t[i]==='N'||t[i]==='n')&&(t[i+1]==='A'||t[i+1]==='a')&&(t[i+2]==='1'||t[i+2]==='2'||t[i+2]==='3')&&t[i+3]===':'){
       var j=i+4,body='';
       while(j<t.length){
         var ch=t[j];
