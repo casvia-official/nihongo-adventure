@@ -311,6 +311,10 @@ button{cursor:pointer;border:none;outline:none;font-family:inherit;}
 .cgi-xp-lbl{display:flex;justify-content:space-between;font-size:11px;color:#6688aa;margin-bottom:3px;font-weight:700;}
 .cgi-xp-bar{height:8px;background:#0a1520;border-radius:2px;border:1px solid #2a4a6a;overflow:hidden;}
 .cgi-xp-fill{height:100%;background:linear-gradient(90deg,#4a9eff,#a040ff);transition:width .8s;}
+.cgi-xp-bar.hell{border-color:#ff5722;box-shadow:0 0 8px rgba(255,87,34,.5);}
+.cgi-xp-fill.hell{background:linear-gradient(90deg,#ff5722,#ffc107);animation:hellPulse 1.4s ease-in-out infinite;}
+@keyframes hellPulse{0%,100%{filter:brightness(1);}50%{filter:brightness(1.4);}}
+.hell-warn{margin-top:6px;font-size:11px;font-weight:900;color:#ff8a50;background:rgba(255,87,34,.12);border:1px solid rgba(255,87,34,.4);border-radius:8px;padding:5px 9px;animation:hellPulse 1.4s ease-in-out infinite;}
 
 /* ステータステーブル */
 .cgi-table{width:100%;}
@@ -852,20 +856,44 @@ const LV_INFO={
 // ランクシステム（xp=その段位の最低XP）
 // レベル式: Lv = floor(√(XP÷10))  →  Lv1000 = 10,000,000 XP
 // 各レベルに必要な累計XP: n*n*10
-function xpToLevel(xp){return Math.min(1000,Math.floor(Math.sqrt(xp/10)));}
-function totalXPForLevel(n){return n*n*10;}
+// レベルNに上がるのに必要な「追加」経験値（NからN+1ではなく、N-1からNへの一段分）
+// 通常はゆるやかな線形。ただし50の倍数レベル（地獄ゾーン）は跳ね上がる関門にする。
+function isHellLevel(n){return n>0&&n<=500&&n%50===0;}
+function stepXPForLevel(n){
+  const base=20+n*12; // ゆるやかな線形カーブ（旧: 20n-10 の二次関数より全体的に軽い）
+  return isHellLevel(n)?base*6:base; // 地獄ゾーンは6倍の壁
+}
+// 累積必要XPテーブル（Lv0〜1000）を初回だけ計算してキャッシュ
+let _cumXPTable=null;
+function cumXPTable(){
+  if(_cumXPTable)return _cumXPTable;
+  const t=[0];
+  for(let n=1;n<=1000;n++)t.push(t[n-1]+stepXPForLevel(n));
+  _cumXPTable=t;
+  return t;
+}
+function totalXPForLevel(n){return cumXPTable()[Math.max(0,Math.min(1000,n))];}
+function xpToLevel(xp){
+  const t=cumXPTable();
+  let lo=0,hi=1000;
+  while(lo<hi){
+    const mid=Math.ceil((lo+hi)/2);
+    if(t[mid]<=xp)lo=mid; else hi=mid-1;
+  }
+  return lo;
+}
 function getLevelInfo(xp){
   const lv=xpToLevel(xp);
-  if(lv>=1000)return{lv:1000,cur:xp,pct:100,need:0,toNext:0};
+  if(lv>=1000)return{lv:1000,cur:xp,pct:100,need:0,toNext:0,nextIsHell:false};
   const base=totalXPForLevel(lv);
   const next=totalXPForLevel(lv+1);
   const span=next-base;
   const cur=xp-base;
-  return{lv,cur,need:span,toNext:next-xp,pct:Math.round(cur/span*100)};
+  return{lv,cur,need:span,toNext:next-xp,pct:Math.round(cur/span*100),nextIsHell:isHellLevel(lv+1)};
 }
 
 // 問題難易度別XP。lv3〜8（ことわざ〜慣用句）は一律80に統一
-const LV_XP=[0,25,35,80,80,80,80,80,80,120,135,150,165,180,195,210,225,240,255];
+const LV_XP=[0,38,53,120,120,120,120,120,120,180,200,225,250,270,290,315,340,360,380]; // 経験値カーブの緩和にあわせ約1.5倍に底上げ
 const STAGE_NAMES={
   1:'ことばの草原', 2:'学びの森',   3:'ことわざ A',
   4:'ことわざ B', 5:'四字熟語 A', 6:'四字熟語 B',
@@ -877,21 +905,21 @@ const STAGE_NAMES={
 // ランク称号（累計XPで判定。レベルの節目に対応）
 const RANKS=[
   {title:"見習いことば戦士",icon:"⚔️",color:"#9E9E9E",xp:0},          // Lv0〜
-  {title:"初級ことば戦士",icon:"⚔️",color:"#4CAF50",xp:250},          // Lv5〜
-  {title:"中級ことば戦士",icon:"⚔️",color:"#2196F3",xp:2250},         // Lv15〜
-  {title:"上級ことば戦士",icon:"⚔️",color:"#FF9800",xp:9000,job:true},// Lv30〜
-  {title:"初級ことば騎士",icon:"⚔️",color:"#F44336",xp:25000},        // Lv50〜
-  {title:"中級ことば騎士",icon:"⚔️",color:"#9C27B0",xp:100000},       // Lv100〜
-  {title:"上級ことば騎士",icon:"⚔️",color:"#FFC107",xp:225000,job:true},// Lv150〜
-  {title:"ことば強者",icon:"⚔️",color:"#FF5722",xp:400000,job:true},   // Lv200〜
-  {title:"ことば拳王",icon:"⚔️",color:"#795548",xp:784000,job:true},   // Lv280〜
-  {title:"ことば帝王",icon:"⚔️",color:"#607D8B",xp:1156000,job:true},  // Lv340〜
-  {title:"ことば覇王",icon:"⚔️",color:"#E91E63",xp:1600000,job:true},  // Lv400〜
-  {title:"ことば魔王",icon:"⚔️",color:"#673AB7",xp:1936000,job:true},  // Lv440〜
-  {title:"ことば賢王",icon:"⚔️",color:"#00BCD4",xp:2209000},           // Lv470〜
-  {title:"皇帝",icon:"⚔️",color:"#FF6F00",xp:2352250},                 // Lv485〜
-  {title:"天帝",icon:"⚔️",color:"#FFC107",xp:2450250},                 // Lv495〜
-  {title:"知識神",icon:"⚔️",color:"#E040FB",xp:2500000},               // Lv500
+  {title:"初級ことば戦士",icon:"⚔️",color:"#4CAF50",xp:280},          // Lv5〜
+  {title:"中級ことば戦士",icon:"⚔️",color:"#2196F3",xp:1740},         // Lv15〜
+  {title:"上級ことば戦士",icon:"⚔️",color:"#FF9800",xp:6180,job:true},// Lv30〜
+  {title:"初級ことば騎士",icon:"⚔️",color:"#F44336",xp:19400},        // Lv50〜（地獄ゾーン突破の称号）
+  {title:"中級ことば騎士",icon:"⚔️",color:"#9C27B0",xp:71800},        // Lv100〜（地獄ゾーン突破の称号）
+  {title:"上級ことば騎士",icon:"⚔️",color:"#FFC107",xp:157200,job:true},// Lv150〜（地獄ゾーン突破の称号）
+  {title:"ことば強者",icon:"⚔️",color:"#FF5722",xp:275600,job:true},   // Lv200〜（地獄ゾーン突破の称号）
+  {title:"ことば拳王",icon:"⚔️",color:"#795548",xp:523180,job:true},   // Lv280〜（地獄ゾーン突破の称号）
+  {title:"ことば帝王",icon:"⚔️",color:"#607D8B",xp:766040,job:true},   // Lv340〜（地獄ゾーン突破の称号）
+  {title:"ことば覇王",icon:"⚔️",color:"#E91E63",xp:1079200,job:true},  // Lv400〜（地獄ゾーン突破の称号）
+  {title:"ことば魔王",icon:"⚔️",color:"#673AB7",xp:1281840,job:true},  // Lv440〜
+  {title:"ことば賢王",icon:"⚔️",color:"#00BCD4",xp:1473520},           // Lv470〜
+  {title:"皇帝",icon:"⚔️",color:"#FF6F00",xp:1559860},                 // Lv485〜
+  {title:"天帝",icon:"⚔️",color:"#FFC107",xp:1618920},                 // Lv495〜
+  {title:"知識神",icon:"⚔️",color:"#E040FB",xp:1679000},               // Lv500〜（地獄ゾーン突破の称号）
 ];
 
 
@@ -2527,9 +2555,10 @@ function renderProfile(){
               </div>
             </div>
             <div class="cgi-job-badge">⚔ 職業：${getJob(rank)}</div>
+            ${lvInfo.nextIsHell?`<div class="hell-warn">🔥 次のレベルは「地獄ゾーン」！ 必要経験値が大きくハネ上がるよ</div>`:''}
             <div class="cgi-xp-wrap">
               <div class="cgi-xp-lbl"><span>${xp.toLocaleString()} XP</span><span>${lvInfo.lv<1000?`あと${lvInfo.toNext.toLocaleString()}`:'MAX'}</span></div>
-              <div class="cgi-xp-bar"><div class="cgi-xp-fill" style="width:${lvInfo.pct}%"></div></div>
+              <div class="cgi-xp-bar${lvInfo.nextIsHell?' hell':''}"><div class="cgi-xp-fill${lvInfo.nextIsHell?' hell':''}" style="width:${lvInfo.pct}%"></div></div>
             </div>
           </div>
         </div>
